@@ -32,7 +32,8 @@ export const PaymentScreen: React.FC<{ onNavigateToTransfer: () => void }> = ({
     processSubscriptionPayment,
     refundPayment,
     payBill,
-    bills
+    bills,
+    openPaymentGateway
   } = useFinFam();
 
   const [activeTab, setActiveTab] = useState(0); // 0: Smart Pay, 1: Premium Plans, 2: Scan & Pay, 3: Pay Bills, 4: Passbook
@@ -54,14 +55,15 @@ export const PaymentScreen: React.FC<{ onNavigateToTransfer: () => void }> = ({
     setTimeout(() => setCopiedUpi(false), 2000);
   };
 
-  const handleSubscribe = async (planId: string) => {
-    setIsProcessing(true);
-    const result = await processSubscriptionPayment(planId, paymentMethod);
-    setIsProcessing(false);
-    if (result.success) {
-      setSuccessStatus(result.message);
-      setTimeout(() => setSuccessStatus(null), 4000);
-    }
+  const handleSubscribe = (planId: string) => {
+    const plan = SUBSCRIPTION_PLANS.find((p) => p.id === planId) || SUBSCRIPTION_PLANS[0];
+    openPaymentGateway({
+      title: plan.title,
+      description: `${plan.badge} • ${plan.durationDays} Days Membership`,
+      amount: plan.amountInr,
+      category: 'SUBSCRIPTION',
+      planId: plan.id
+    });
   };
 
   const handleRefund = async (paymentId: string) => {
@@ -72,14 +74,14 @@ export const PaymentScreen: React.FC<{ onNavigateToTransfer: () => void }> = ({
     }
   };
 
-  const handleCustomUpiPay = async () => {
+  const handleCustomUpiPay = () => {
     const amt = parseFloat(customPayAmount);
     if (isNaN(amt) || amt <= 0) return;
-    setIsProcessing(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setIsProcessing(false);
-    setSuccessStatus(`Successfully sent ₹${amt.toLocaleString('en-IN')} to ${merchantUpi}!`);
-    setTimeout(() => setSuccessStatus(null), 4000);
+    openPaymentGateway({
+      title: customPayNote || 'Direct Household Transfer',
+      amount: amt,
+      category: 'TRANSFER'
+    });
   };
 
   return (
@@ -101,12 +103,26 @@ export const PaymentScreen: React.FC<{ onNavigateToTransfer: () => void }> = ({
           </p>
         </div>
 
-        <button
-          onClick={onNavigateToTransfer}
-          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-400 text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          <Zap className="w-3.5 h-3.5" /> P2P Mesh Beam
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() =>
+              openPaymentGateway({
+                title: 'FinFam Gateway Checkout Demo',
+                amount: parseFloat(customPayAmount || '500'),
+                category: 'CUSTOM'
+              })
+            }
+            className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-[#050816] text-xs font-bold shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition-all"
+          >
+            <Zap className="w-3.5 h-3.5" /> Launch Gateway
+          </button>
+          <button
+            onClick={onNavigateToTransfer}
+            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-400 text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5"
+          >
+            P2P Mesh Beam
+          </button>
+        </div>
       </div>
 
       {successStatus && (
@@ -468,8 +484,15 @@ export const PaymentScreen: React.FC<{ onNavigateToTransfer: () => void }> = ({
                   </span>
                   {!bill.isPaid ? (
                     <button
-                      onClick={() => payBill(bill.id, bill.name, bill.amount, 'UPI')}
-                      className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#050816] text-xs font-bold"
+                      onClick={() =>
+                        openPaymentGateway({
+                          title: `${bill.name} (${bill.category})`,
+                          amount: bill.amount,
+                          category: 'BILL',
+                          billId: bill.id
+                        })
+                      }
+                      className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#050816] text-xs font-bold transition-all shadow-md shadow-cyan-500/20"
                     >
                       Pay
                     </button>

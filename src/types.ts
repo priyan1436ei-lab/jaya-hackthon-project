@@ -53,16 +53,11 @@ export interface BudgetItem {
   alertThreshold100: boolean;
 }
 
-export interface GoalItem {
-  id: number;
-  name: string;
-  emoji: string;
-  targetAmount: number;
-  currentAmount: number;
-  targetDate: string;
-  category: string;
-  isFamilyGoal: boolean;
-}
+import {
+  GoalItem as ExtendedGoalItem
+} from './types/goalPlanning';
+
+export type GoalItem = ExtendedGoalItem;
 
 export interface BillItem {
   id: number;
@@ -416,4 +411,5 @@ export interface SubscriptionPlanTier {
 }
 
 export * from './types/decisionOptimizer';
+export * from './types/goalPlanning';
 

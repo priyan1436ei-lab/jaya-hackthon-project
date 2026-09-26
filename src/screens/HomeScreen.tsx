@@ -18,7 +18,9 @@ import {
   AlertCircle,
   Plus,
   Trash2,
-  Scale
+  Scale,
+  Network,
+  AlertTriangle
 } from 'lucide-react';
 import { useFinFam } from '../context/FinFamContext';
 import { FinancialEngine } from '../lib/financialEngine';
@@ -47,10 +49,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     bills,
     emis,
     deleteTransaction,
-    payBill
+    payBill,
+    goalFeasibilities,
+    goalConflicts,
+    householdProfile
   } = useFinFam();
 
   const healthScore = financialHealth.overallScore;
+
+  // Multi-Goal quick status
+  const conflictCount = goalConflicts.length;
+  const criticalConflictCount = goalConflicts.filter((c) => c.severity === 'CRITICAL' || c.severity === 'HIGH').length;
+  const totalRequiredMonthly = Object.values(goalFeasibilities).reduce(
+    (sum, f) => sum + (f.requiredMonthlyContribution || 0),
+    0
+  );
+  const netCapacity = Math.max(
+    householdProfile.monthlyNetIncome -
+      (householdProfile.essentialMonthlyExpenses +
+        householdProfile.activeEmiMonthlyTotal +
+        householdProfile.discretionaryMonthlyExpenses),
+    0
+  );
+  const shortfall = Math.max(totalRequiredMonthly - netCapacity, 0);
 
   // Circle circumference for gauge
   const radius = 38;
@@ -196,6 +217,57 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
       </div>
 
+      {/* 2.5 Multi-Goal Portfolio Intelligence Banner */}
+      <div className="rounded-2xl bg-gradient-to-r from-[#0C1A32] via-[#09152C] to-[#12112E] border border-cyan-500/30 p-5 shadow-lg relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30">
+                Multi-Goal Planning & Conflict Engine
+              </span>
+              {criticalConflictCount > 0 ? (
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> {conflictCount} Conflicts Active
+                </span>
+              ) : (
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                  Goals In Harmony
+                </span>
+              )}
+            </div>
+            <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+              <Target className="w-4 h-4 text-cyan-400" /> Multi-Goal Cashflow Capacity
+            </h3>
+            <p className="text-xs text-slate-300 max-w-xl">
+              {shortfall > 0
+                ? `Total goal demand ₹${totalRequiredMonthly.toLocaleString('en-IN')}/mo exceeds net household flow ₹${netCapacity.toLocaleString('en-IN')}/mo by ₹${shortfall.toLocaleString('en-IN')}/mo.`
+                : `Net available capacity ₹${netCapacity.toLocaleString('en-IN')}/mo comfortably funds all ${goals.length} active household goals.`}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => onNavigate('goal_portfolio')}
+              className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-[#050816] text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+            >
+              <Target className="w-3.5 h-3.5 stroke-[2.5]" /> Multi-Goal Suite
+            </button>
+            <button
+              onClick={() => onNavigate('ripple_simulator')}
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-white/10 transition-all flex items-center gap-1.5"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" /> What-If Sim
+            </button>
+            <button
+              onClick={() => onNavigate('resolution_lab')}
+              className="px-3 py-2 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 text-purple-200 text-xs font-semibold border border-purple-500/30 transition-all flex items-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Resolve
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* 3. Quick Actions Grid */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -205,6 +277,56 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <button
+            onClick={() => onNavigate('goal_portfolio')}
+            className="p-3.5 rounded-xl bg-gradient-to-r from-cyan-950/60 to-blue-950/60 border border-cyan-500/40 hover:border-cyan-400 text-left transition-all group col-span-2 sm:col-span-2"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Target className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">Multi-Goal Planning</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30">
+                      CORE
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-300 mt-0.5">
+                    Conflict Detection • Capacity Engine • Feasibility Scoring
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </button>
+
+          <button
+            onClick={() => onNavigate('goal_interference')}
+            className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/60 to-purple-950/60 border border-purple-500/40 hover:border-purple-400 text-left transition-all group col-span-2 sm:col-span-2"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Network className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">Interference Matrix</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30">
+                      N × N
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-300 mt-0.5">
+                    Cross-Goal Interference • Timeline Overlap & Severity
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-purple-400 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </button>
+
           <button
             onClick={() => onNavigate('optimizer')}
             className="p-3.5 rounded-xl bg-gradient-to-r from-purple-950/60 to-indigo-950/60 border border-purple-500/40 hover:border-purple-400 text-left transition-all group col-span-2 sm:col-span-4"

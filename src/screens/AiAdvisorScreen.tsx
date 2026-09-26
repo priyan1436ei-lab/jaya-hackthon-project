@@ -19,16 +19,17 @@ export const AiAdvisorScreen: React.FC = () => {
     monthlySpendingTrends,
     emis,
     budgets,
-    goals
+    goals,
+    householdProfile
   } = useFinFam();
 
   const [messages, setMessages] = useState<AiChatMessage[]>([
     {
       id: 'welcome',
       sender: 'assistant',
-      text: `Namaste ${userProfile.name}! I am your FinFam Wealth Coach. I've analyzed your family vault with a total balance of ₹${userProfile.totalBalance.toLocaleString(
+      text: `Namaste ${userProfile.name}! I am your FinFam Multi-Goal Intelligence Coach. I've analyzed your family vault with a total balance of ₹${userProfile.totalBalance.toLocaleString(
         'en-IN'
-      )} and a Financial Health score of ${financialHealth.overallScore}/100. How can I assist your household today?`,
+      )} and your household goals against available cashflow. Ask me anything about goal conflicts, deadline trade-offs, or resolution scenarios!`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -38,9 +39,10 @@ export const AiAdvisorScreen: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const quickPrompts = [
-    'How can our family save ₹10,000 extra this month?',
-    'Is taking a ₹1.2L loan financially sound right now?',
-    'Analyze our top spending category & leakages',
+    'Why do our financial goals have a funding conflict?',
+    'What happens if we move our House deadline to 2028?',
+    'What resolution scenarios can eliminate our shortfall?',
+    'What if our family saves ₹5,000 more per month?',
     'Should we prepay our active EMIs or invest in SIP?'
   ];
 
@@ -69,7 +71,8 @@ export const AiAdvisorScreen: React.FC = () => {
         monthlySpendingTrends,
         emis,
         budgets,
-        goals
+        goals,
+        householdProfile
       });
 
       const botMsg: AiChatMessage = {

@@ -28,7 +28,13 @@ export const FinFamTopAppBar: React.FC<FinFamTopAppBarProps> = ({
   onOpenAddExpense,
   onOpenScanReceipt
 }) => {
-  const { userProfile, notifications, dismissNotification, markAllNotificationsRead } = useFinFam();
+  const {
+    userProfile,
+    notifications,
+    dismissNotification,
+    markAllNotificationsRead,
+    openPaymentGateway
+  } = useFinFam();
   const [showNotifications, setShowNotifications] = useState(false);
 
   const unreadCount = notifications.filter((n) => n.isUnread).length;
@@ -61,9 +67,15 @@ export const FinFamTopAppBar: React.FC<FinFamTopAppBarProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onNavigate('payment');
+                    openPaymentGateway({
+                      title: 'FinFam Pro Annual Membership',
+                      description: 'Full multi-goal engine, unlimited scenarios & AI coach',
+                      amount: 1499,
+                      category: 'SUBSCRIPTION',
+                      planId: 'premium_annual'
+                    });
                   }}
-                  className="text-[11px] font-semibold text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-2 py-0.5 rounded-full border border-amber-500/30 transition-colors flex items-center gap-1"
+                  className="text-[11px] font-semibold text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-2 py-0.5 rounded-full border border-amber-500/30 transition-colors flex items-center gap-1 shadow-sm"
                 >
                   <Sparkles className="w-3 h-3 text-amber-400" /> Upgrade
                 </button>

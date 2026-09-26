@@ -325,29 +325,61 @@ export const AddGoalModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [targetAmount, setTargetAmount] = useState('');
-  const [targetDate, setTargetDate] = useState('Dec 2026');
+  const [currentAmount, setCurrentAmount] = useState('0');
+  const [targetDate, setTargetDate] = useState('Dec 2027');
   const [category, setCategory] = useState('Savings');
+  const [priorityLabel, setPriorityLabel] = useState<'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'>('HIGH');
+  const [hardDeadline, setHardDeadline] = useState(false);
+  const [flexibilityMonths, setFlexibilityMonths] = useState('12');
+  const [minimumAcceptable, setMinimumAcceptable] = useState('');
+  const [monthlyAllocation, setMonthlyAllocation] = useState('');
+  const [expectedReturn, setExpectedReturn] = useState('0');
+  const [inflationRate, setInflationRate] = useState('0');
+  const [canPause, setCanPause] = useState(true);
+  const [canReduceTarget, setCanReduceTarget] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [isFamilyGoal, setIsFamilyGoal] = useState(true);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const num = parseFloat(targetAmount);
-    if (!name || isNaN(num) || num <= 0) return;
-    addGoal(name, emoji, num, targetDate, category, isFamilyGoal);
+    const targetNum = parseFloat(targetAmount);
+    if (!name || isNaN(targetNum) || targetNum <= 0) return;
+
+    const currentNum = parseFloat(currentAmount) || 0;
+    const priority = priorityLabel === 'CRITICAL' ? 1 : priorityLabel === 'HIGH' ? 2 : priorityLabel === 'MEDIUM' ? 3 : 4;
+    const minAcceptableNum = parseFloat(minimumAcceptable) || Math.round(targetNum * 0.8);
+    const allocationNum = parseFloat(monthlyAllocation) || 0;
+    const flexMonths = parseInt(flexibilityMonths) || 12;
+
+    addGoal(name, emoji, targetNum, targetDate, category, isFamilyGoal, {
+      currentAmount: currentNum,
+      priority,
+      priorityLabel,
+      hardDeadline,
+      deadlineFlexibilityMonths: hardDeadline ? 0 : flexMonths,
+      minimumAcceptableAmount: minAcceptableNum,
+      monthlyAllocation: allocationNum,
+      expectedAnnualReturn: parseFloat(expectedReturn) || 0,
+      inflationRate: parseFloat(inflationRate) || 0,
+      canPause,
+      canReduceTarget
+    });
+
     onClose();
     setName('');
     setTargetAmount('');
+    setCurrentAmount('0');
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-md bg-[#0E1528] border border-white/10 rounded-2xl shadow-2xl p-6 relative">
+      <div className="w-full max-w-lg bg-[#0E1528] border border-white/10 rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <Target className="w-5 h-5 text-cyan-400" />
-            <h2 className="text-base font-bold text-white">Create Savings Goal</h2>
+            <h2 className="text-base font-bold text-white">Create Savings Goal & Milestone</h2>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
             <X className="w-5 h-5" />
@@ -380,7 +412,7 @@ export const AddGoalModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Target (₹)</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Target Amount (₹)</label>
               <input
                 type="number"
                 required
@@ -391,7 +423,20 @@ export const AddGoalModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Target Date</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Initial Saved Stock (₹)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={currentAmount}
+                onChange={(e) => setCurrentAmount(e.target.value)}
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Target Deadline</label>
               <input
                 type="text"
                 placeholder="e.g. Dec 2027"
@@ -400,19 +445,140 @@ export const AddGoalModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
                 className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
               />
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Priority Level</label>
+              <select
+                value={priorityLabel}
+                onChange={(e) => setPriorityLabel(e.target.value as any)}
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
+              >
+                <option value="CRITICAL">1 - CRITICAL (Top Shield)</option>
+                <option value="HIGH">2 - HIGH Priority</option>
+                <option value="MEDIUM">3 - MEDIUM Priority</option>
+                <option value="LOW">4 - LOW / Flexible</option>
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 pt-2">
-            <input
-              type="checkbox"
-              id="isFamilyGoal"
-              checked={isFamilyGoal}
-              onChange={(e) => setIsFamilyGoal(e.target.checked)}
-              className="w-4 h-4 rounded text-cyan-500 bg-slate-900 border-white/20 focus:ring-cyan-500"
-            />
-            <label htmlFor="isFamilyGoal" className="text-xs text-slate-300 font-medium cursor-pointer">
-              Make this a Shared Family Milestone
-            </label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
+              >
+                <option value="Savings">General Savings</option>
+                <option value="Emergency">Emergency Reserve</option>
+                <option value="Home">Home & Property</option>
+                <option value="Education">Higher Education</option>
+                <option value="Travel">Vacation & Travel</option>
+                <option value="Vehicle">Vehicle Purchase</option>
+                <option value="Retirement">Retirement Wealth</option>
+              </select>
+            </div>
+            <div className="flex items-center pt-5">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hardDeadline}
+                  onChange={(e) => setHardDeadline(e.target.checked)}
+                  className="w-4 h-4 rounded text-cyan-500 bg-slate-900 border-white/20 focus:ring-cyan-500"
+                />
+                <span className="text-xs text-slate-300 font-medium">Locked Hard Deadline</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Collapsible Advanced Options */}
+          <div className="border border-white/10 rounded-xl p-3 bg-slate-900/60">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full flex items-center justify-between text-xs font-bold text-cyan-400"
+            >
+              <span>⚙️ Advanced Planning & Constraints</span>
+              <span>{showAdvanced ? '▲ Hide' : '▼ Expand'}</span>
+            </button>
+
+            {showAdvanced && (
+              <div className="mt-3 space-y-3 pt-3 border-t border-white/10">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                      Max Allowed Extension (Mo)
+                    </label>
+                    <input
+                      type="number"
+                      value={flexibilityMonths}
+                      onChange={(e) => setFlexibilityMonths(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white"
+                      disabled={hardDeadline}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                      Minimum Acceptable Target (₹)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 120000"
+                      value={minimumAcceptable}
+                      onChange={(e) => setMinimumAcceptable(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                      Expected Annual Return (%)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={expectedReturn}
+                      onChange={(e) => setExpectedReturn(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                      Inflation Rate (%)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={inflationRate}
+                      onChange={(e) => setInflationRate(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-1">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={canPause}
+                      onChange={(e) => setCanPause(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded"
+                    />
+                    Can Pause in Conflict
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={canReduceTarget}
+                      onChange={(e) => setCanReduceTarget(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded"
+                    />
+                    Can Trim Target
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-white/10">
@@ -427,7 +593,7 @@ export const AddGoalModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
               type="submit"
               className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-[#050816] font-bold text-xs transition-all shadow-lg shadow-cyan-500/20"
             >
-              Add Goal
+              Add Goal to Portfolio
             </button>
           </div>
         </form>
@@ -441,7 +607,7 @@ export const TopUpGoalModal: React.FC<{
   onClose: () => void;
   goal: GoalItem | null;
 }> = ({ isOpen, onClose, goal }) => {
-  const { depositGoal } = useFinFam();
+  const { depositGoal, openPaymentGateway } = useFinFam();
   const [amount, setAmount] = useState('');
 
   if (!isOpen || !goal) return null;
@@ -500,20 +666,41 @@ export const TopUpGoalModal: React.FC<{
             ))}
           </div>
 
-          <div className="flex gap-3 pt-3 border-t border-white/10">
+          <div className="space-y-2 pt-3 border-t border-white/10">
             <button
               type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-300 font-semibold text-xs hover:bg-white/5"
+              onClick={() => {
+                const num = parseFloat(amount || '5000');
+                if (isNaN(num) || num <= 0) return;
+                onClose();
+                openPaymentGateway({
+                  title: `Fund Goal: ${goal.name}`,
+                  description: `Target: ₹${goal.targetAmount.toLocaleString('en-IN')}`,
+                  amount: num,
+                  category: 'GOAL_TOPUP',
+                  goalId: goal.id
+                });
+              }}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-[#050816] font-bold text-xs shadow-md shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition-all"
             >
-              Cancel
+              <Zap className="w-3.5 h-3.5" /> Pay via Gateway (UPI / Cards)
             </button>
-            <button
-              type="submit"
-              className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-[#050816] font-bold text-xs"
-            >
-              Deposit Funds
-            </button>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2 rounded-xl border border-white/10 text-slate-300 font-semibold text-xs hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 font-bold text-xs"
+              >
+                Transfer from Vault
+              </button>
+            </div>
           </div>
         </form>
       </div>

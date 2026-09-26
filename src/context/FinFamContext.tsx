@@ -25,9 +25,28 @@ import {
   RealTimeTransferType
 } from '../types';
 import { DecisionHistoryRecord } from '../types/decisionOptimizer';
+import {
+  HouseholdFinancialProfile,
+  GoalFeasibilityResult,
+  SharedTimelineResult,
+  GoalConflictItem,
+  InterferenceMatrixResult,
+  ResolutionComparisonResult,
+  ResolutionScenario
+} from '../types/goalPlanning';
 import { FinancialEngine } from '../lib/financialEngine';
 import { SpendingTrendsEngine } from '../lib/spendingTrendsEngine';
 import { GeminiAiEngine } from '../lib/geminiAiEngine';
+import {
+  GoalFeasibilityEngine,
+  SharedCashflowTimelineEngine,
+  GoalConflictEngine,
+  GoalInterferenceEngine,
+  RippleResolutionEngine,
+  DEMO_GOALS,
+  DEMO_PROFILE
+} from '../lib/goalPlanning';
+import { PaymentGatewayOrderData } from '../components/PaymentGatewayModal';
 
 const INITIAL_DECISION_HISTORY: DecisionHistoryRecord[] = [
   {
@@ -201,9 +220,9 @@ const INITIAL_BUDGETS: BudgetItem[] = [
 ];
 
 const INITIAL_GOALS: GoalItem[] = [
-  { id: 1, name: 'Emergency Reserve Fund', emoji: '🛡️', targetAmount: 100000, currentAmount: 72500, targetDate: 'Dec 2026', category: 'Emergency', isFamilyGoal: true },
-  { id: 2, name: 'Japan Family Vacation 2027', emoji: '✈️', targetAmount: 250000, currentAmount: 68000, targetDate: 'May 2027', category: 'Travel', isFamilyGoal: true },
-  { id: 3, name: 'Ananya Education Fund', emoji: '🎓', targetAmount: 500000, currentAmount: 145000, targetDate: 'Aug 2028', category: 'Education', isFamilyGoal: true }
+  GoalFeasibilityEngine.normalizeGoal({ id: 1, name: 'Emergency Reserve Fund', emoji: '🛡️', targetAmount: 100000, currentAmount: 72500, targetDate: 'Dec 2026', category: 'Emergency', isFamilyGoal: true }),
+  GoalFeasibilityEngine.normalizeGoal({ id: 2, name: 'Japan Family Vacation 2027', emoji: '✈️', targetAmount: 250000, currentAmount: 68000, targetDate: 'May 2027', category: 'Travel', isFamilyGoal: true }),
+  GoalFeasibilityEngine.normalizeGoal({ id: 3, name: 'Ananya Education Fund', emoji: '🎓', targetAmount: 500000, currentAmount: 145000, targetDate: 'Aug 2028', category: 'Education', isFamilyGoal: true })
 ];
 
 const INITIAL_BILLS: BillItem[] = [
@@ -650,10 +669,26 @@ interface FinFamContextType {
   deleteTransaction: (id: number) => void;
   addBudget: (category: string, limit: number) => void;
   deleteBudget: (id: number) => void;
-  addGoal: (name: string, emoji: string, targetAmount: number, targetDate: string, category: string, isFamilyGoal: boolean) => void;
+  addGoal: (name: string, emoji: string, targetAmount: number, targetDate: string, category: string, isFamilyGoal: boolean, options?: Partial<GoalItem>) => void;
   depositGoal: (id: number, amount: number) => void;
   withdrawGoal: (id: number, amount: number) => void;
   deleteGoal: (id: number) => void;
+  updateGoal: (goal: GoalItem) => void;
+  setGoals: React.Dispatch<React.SetStateAction<GoalItem[]>>;
+  householdProfile: HouseholdFinancialProfile;
+  setHouseholdProfile: React.Dispatch<React.SetStateAction<HouseholdFinancialProfile>>;
+  goalFeasibilities: Record<number, GoalFeasibilityResult>;
+  sharedTimeline: SharedTimelineResult;
+  goalConflicts: GoalConflictItem[];
+  interferenceMatrix: InterferenceMatrixResult;
+  resolutionResult: ResolutionComparisonResult;
+  isDemoMode: boolean;
+  loadJudgeDemoScenario: () => void;
+  resetJudgeDemoScenario: () => void;
+  applyResolutionScenario: (scenario: ResolutionScenario) => void;
+  revertLastAppliedPlan: () => void;
+  previousGoalsSnapshot: GoalItem[] | null;
+  setPreviousGoalsSnapshot: React.Dispatch<React.SetStateAction<GoalItem[] | null>>;
   addBill: (name: string, amount: number, dueDate: string, category: string, isRecurring: boolean, autoPay: boolean) => void;
   payBill: (billId: number, billName: string, amount: number, method?: string) => void;
   deleteBill: (id: number) => void;
@@ -670,6 +705,11 @@ interface FinFamContextType {
   saveDecisionRecord: (record: Omit<DecisionHistoryRecord, 'id' | 'timestamp'>) => void;
   deleteDecisionRecord: (id: string) => void;
   updateDecisionStatus: (id: string, status: 'IMPLEMENTED' | 'DISMISSED' | 'PENDING') => void;
+  isPaymentGatewayOpen: boolean;
+  activeGatewayOrder: PaymentGatewayOrderData | null;
+  openPaymentGateway: (order: PaymentGatewayOrderData) => void;
+  closePaymentGateway: () => void;
+  handleGatewayPaymentSuccess: (txn: RazorpayTransactionRecord) => void;
 }
 
 const FinFamContext = createContext<FinFamContextType | null>(null);
@@ -698,7 +738,17 @@ export const FinFamProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const [goals, setGoals] = useState<GoalItem[]>(() => {
     const saved = localStorage.getItem('finfam_goals');
-    return saved ? JSON.parse(saved) : INITIAL_GOALS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map((g) => GoalFeasibilityEngine.normalizeGoal(g));
+        }
+      } catch (e) {
+        // fallback
+      }
+    }
+    return INITIAL_GOALS.map((g) => GoalFeasibilityEngine.normalizeGoal(g));
   });
 
   const [bills, setBills] = useState<BillItem[]>(() => {
@@ -765,6 +815,116 @@ export const FinFamProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => { localStorage.setItem('finfam_transfers', JSON.stringify(realTimeTransferHistory)); }, [realTimeTransferHistory]);
   useEffect(() => { localStorage.setItem('finfam_payments', JSON.stringify(paymentHistory)); }, [paymentHistory]);
   useEffect(() => { localStorage.setItem('finfam_decision_history', JSON.stringify(decisionHistory)); }, [decisionHistory]);
+
+  // Multi-Goal Planning Engine State
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
+    return localStorage.getItem('finfam_is_demo') === 'true';
+  });
+  const [previousGoalsSnapshot, setPreviousGoalsSnapshot] = useState<GoalItem[] | null>(null);
+
+  const [householdProfile, setHouseholdProfile] = useState<HouseholdFinancialProfile>(() => {
+    const activeEmiTotal = INITIAL_EMIS.reduce((sum, e) => sum + e.monthlyEmi, 0);
+    const recurringBillsTotal = INITIAL_BILLS.filter((b) => b.isRecurring).reduce((sum, b) => sum + b.amount, 0);
+    return {
+      monthlyNetIncome: INITIAL_PROFILE.monthlyIncome,
+      essentialMonthlyExpenses: Math.round(INITIAL_PROFILE.monthlyExpenses * 0.65),
+      discretionaryMonthlyExpenses: Math.round(INITIAL_PROFILE.monthlyExpenses * 0.35),
+      existingCashBalance: INITIAL_PROFILE.totalBalance,
+      protectedEmergencyReserve: INITIAL_PROFILE.emergencyFund,
+      unassignedSavings: Math.max(INITIAL_PROFILE.totalBalance - INITIAL_PROFILE.emergencyFund, 0),
+      activeEmiMonthlyTotal: activeEmiTotal,
+      recurringBillsTotal: recurringBillsTotal
+    };
+  });
+
+  // Keep householdProfile in sync with userProfile, emis, and bills when not manually overridden
+  useEffect(() => {
+    if (!isDemoMode) {
+      const activeEmiTotal = emis.reduce((sum, e) => sum + e.monthlyEmi, 0);
+      const recurringBillsTotal = bills.filter((b) => b.isRecurring).reduce((sum, b) => sum + b.amount, 0);
+      setHouseholdProfile((prev) => ({
+        ...prev,
+        monthlyNetIncome: userProfile.monthlyIncome,
+        essentialMonthlyExpenses: Math.round(userProfile.monthlyExpenses * 0.65),
+        discretionaryMonthlyExpenses: Math.round(userProfile.monthlyExpenses * 0.35),
+        existingCashBalance: userProfile.totalBalance,
+        protectedEmergencyReserve: userProfile.emergencyFund,
+        unassignedSavings: Math.max(userProfile.totalBalance - userProfile.emergencyFund, 0),
+        activeEmiMonthlyTotal: activeEmiTotal,
+        recurringBillsTotal: recurringBillsTotal
+      }));
+    }
+  }, [userProfile.monthlyIncome, userProfile.monthlyExpenses, userProfile.totalBalance, userProfile.emergencyFund, emis, bills, isDemoMode]);
+
+  // Derived Goal Planning Calculations
+  const goalFeasibilities: Record<number, GoalFeasibilityResult> = useMemo(() => {
+    const map: Record<number, GoalFeasibilityResult> = {};
+    goals.forEach((g) => {
+      map[g.id] = GoalFeasibilityEngine.calculateGoalFeasibility(g);
+    });
+    return map;
+  }, [goals]);
+
+  const sharedTimeline: SharedTimelineResult = useMemo(() => {
+    return SharedCashflowTimelineEngine.simulateTimeline(goals, householdProfile, {
+      priorityAwareAllocation: true,
+      activeEmis: emis.map((e) => ({
+        id: e.id,
+        monthlyEmi: e.monthlyEmi,
+        remainingMonths: Math.max(e.totalTenureMonths - e.paidTenureMonths, 1)
+      }))
+    });
+  }, [goals, householdProfile, emis]);
+
+  const goalConflicts: GoalConflictItem[] = useMemo(() => {
+    return GoalConflictEngine.detectConflicts(goals, householdProfile);
+  }, [goals, householdProfile]);
+
+  const interferenceMatrix: InterferenceMatrixResult = useMemo(() => {
+    return GoalInterferenceEngine.analyzeInterference(goals, householdProfile);
+  }, [goals, householdProfile]);
+
+  const resolutionResult: ResolutionComparisonResult = useMemo(() => {
+    return RippleResolutionEngine.generateResolutions(goals, householdProfile);
+  }, [goals, householdProfile]);
+
+  const loadJudgeDemoScenario = () => {
+    setPreviousGoalsSnapshot(goals);
+    setGoals(DEMO_GOALS.map((g) => GoalFeasibilityEngine.normalizeGoal(g)));
+    setHouseholdProfile(DEMO_PROFILE);
+    setIsDemoMode(true);
+    localStorage.setItem('finfam_is_demo', 'true');
+  };
+
+  const resetJudgeDemoScenario = () => {
+    if (previousGoalsSnapshot) {
+      setGoals(previousGoalsSnapshot);
+      setPreviousGoalsSnapshot(null);
+    } else {
+      setGoals(INITIAL_GOALS.map((g) => GoalFeasibilityEngine.normalizeGoal(g)));
+    }
+    setIsDemoMode(false);
+    localStorage.removeItem('finfam_is_demo');
+  };
+
+  const applyResolutionScenario = (scenario: ResolutionScenario) => {
+    setPreviousGoalsSnapshot(goals);
+    setGoals(scenario.adjustedGoals);
+    if (scenario.householdProfileChanges) {
+      setHouseholdProfile((prev) => ({ ...prev, ...scenario.householdProfileChanges }));
+    }
+  };
+
+  const revertLastAppliedPlan = () => {
+    if (previousGoalsSnapshot) {
+      setGoals(previousGoalsSnapshot);
+      setPreviousGoalsSnapshot(null);
+    }
+  };
+
+  const updateGoal = (updatedGoal: GoalItem) => {
+    setGoals((prev) => prev.map((g) => (g.id === updatedGoal.id ? updatedGoal : g)));
+  };
 
   const saveDecisionRecord = (record: Omit<DecisionHistoryRecord, 'id' | 'timestamp'>) => {
     const newRecord: DecisionHistoryRecord = {
@@ -1205,6 +1365,103 @@ export const FinFamProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return { success: true, message: 'Refund initiated successfully. Will reflect in 2-3 banking days.' };
   };
 
+  // Dedicated Payment Gateway Modal State
+  const [isPaymentGatewayOpen, setIsPaymentGatewayOpen] = useState(false);
+  const [activeGatewayOrder, setActiveGatewayOrder] = useState<PaymentGatewayOrderData | null>(null);
+
+  const openPaymentGateway = (order: PaymentGatewayOrderData) => {
+    setActiveGatewayOrder(order);
+    setIsPaymentGatewayOpen(true);
+  };
+
+  const closePaymentGateway = () => {
+    setIsPaymentGatewayOpen(false);
+    setActiveGatewayOrder(null);
+  };
+
+  const handleGatewayPaymentSuccess = (txn: RazorpayTransactionRecord) => {
+    setPaymentHistory((prev) => [txn, ...prev]);
+
+    if (!activeGatewayOrder) return;
+
+    if (activeGatewayOrder.category === 'SUBSCRIPTION' || activeGatewayOrder.planId) {
+      const plan = SUBSCRIPTION_PLANS.find((p) => p.id === activeGatewayOrder.planId) || SUBSCRIPTION_PLANS[0];
+      const endDate = new Date(Date.now() + plan.durationDays * 86400000);
+      const validUntil = endDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+      setUserProfile((prev) => ({
+        ...prev,
+        isPremium: true,
+        premiumTier: (activeGatewayOrder.planId || 'PREMIUM_ANNUAL').toUpperCase() as any,
+        premiumValidUntil: validUntil
+      }));
+
+      addExpense(
+        `${plan.title} Subscription`,
+        'Subscriptions',
+        txn.amount,
+        txn.paymentMethod,
+        `Payment Gateway Ref: ${txn.paymentId} (Order: ${txn.orderId})`,
+        false,
+        'Priyanshu'
+      );
+
+      addNotificationAlert(
+        'Subscription Activated',
+        `₹${txn.amount} paid for ${plan.title} via ${txn.paymentMethod}. FinFam PRO active until ${validUntil}.`,
+        'PAYMENT_SUCCESS',
+        `₹${txn.amount}`
+      );
+    } else if (activeGatewayOrder.category === 'BILL' && activeGatewayOrder.billId) {
+      setBills((prev) =>
+        prev.map((b) => (b.id === activeGatewayOrder.billId ? { ...b, isPaid: true } : b))
+      );
+
+      addExpense(
+        activeGatewayOrder.title,
+        'Bills',
+        txn.amount,
+        txn.paymentMethod,
+        `Payment Gateway Ref: ${txn.paymentId}`,
+        true,
+        'Priyanshu'
+      );
+
+      addNotificationAlert(
+        'Bill Settled',
+        `₹${txn.amount} paid for ${activeGatewayOrder.title} via ${txn.paymentMethod}.`,
+        'PAYMENT_SUCCESS',
+        `₹${txn.amount}`
+      );
+    } else if (activeGatewayOrder.category === 'GOAL_TOPUP' && activeGatewayOrder.goalId) {
+      depositGoal(activeGatewayOrder.goalId, txn.amount);
+
+      addNotificationAlert(
+        'Goal Milestone Funded',
+        `₹${txn.amount} deposited into ${activeGatewayOrder.title} via Payment Gateway.`,
+        'PAYMENT_SUCCESS',
+        `₹${txn.amount}`
+      );
+    } else {
+      addExpense(
+        activeGatewayOrder.title,
+        'Payment',
+        txn.amount,
+        txn.paymentMethod,
+        `Payment Gateway Ref: ${txn.paymentId}`,
+        false,
+        'Priyanshu'
+      );
+
+      addNotificationAlert(
+        'Payment Completed',
+        `₹${txn.amount} successfully paid for ${activeGatewayOrder.title} via ${txn.paymentMethod}.`,
+        'PAYMENT_SUCCESS',
+        `₹${txn.amount}`
+      );
+    }
+  };
+
   // CRUD Operations
   const addExpense = (
     title: string,
@@ -1308,8 +1565,16 @@ export const FinFamProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setBudgets((prev) => prev.filter((b) => b.id !== id));
   };
 
-  const addGoal = (name: string, emoji: string, targetAmount: number, targetDate: string, category: string, isFamilyGoal: boolean) => {
-    const newGoal: GoalItem = {
+  const addGoal = (
+    name: string,
+    emoji: string,
+    targetAmount: number,
+    targetDate: string,
+    category: string,
+    isFamilyGoal: boolean,
+    options?: Partial<GoalItem>
+  ) => {
+    const rawGoal: Partial<GoalItem> = {
       id: Date.now(),
       name,
       emoji: emoji || '🎯',
@@ -1317,23 +1582,92 @@ export const FinFamProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       currentAmount: 0,
       targetDate,
       category,
-      isFamilyGoal
+      isFamilyGoal,
+      ...options
     };
+    const newGoal = GoalFeasibilityEngine.normalizeGoal(rawGoal);
     setGoals((prev) => [...prev, newGoal]);
   };
 
   const depositGoal = (id: number, amount: number) => {
+    const goal = goals.find((g) => g.id === id);
+    if (!goal || isNaN(amount) || amount <= 0) return;
+
+    // Remaining gap on the goal
+    const remainingGap = Math.max(goal.targetAmount - goal.currentAmount, 0);
+    if (remainingGap <= 0) return;
+
+    // Available cash balance in household vault
+    const availableCash = Math.max(userProfile.totalBalance, 0);
+    const actualDeposit = Math.min(amount, remainingGap, availableCash);
+    if (actualDeposit <= 0) return;
+
     setGoals((prev) =>
-      prev.map((g) => (g.id === id ? { ...g, currentAmount: Math.min(g.currentAmount + amount, g.targetAmount) } : g))
+      prev.map((g) => (g.id === id ? { ...g, currentAmount: g.currentAmount + actualDeposit } : g))
     );
-    addExpense(`Goal Deposit: Goal #${id}`, 'Savings', amount, 'Vault Transfer', 'Deposited into Goal', true);
+
+    // Internal stock transfer: deduct from unassigned cash, increase earmarked goal stock
+    setUserProfile((prev) => ({
+      ...prev,
+      totalBalance: Math.max(prev.totalBalance - actualDeposit, 0)
+    }));
+
+    // Record transaction as TRANSFER (NOT an EXPENSE, does NOT inflate monthly household outflow)
+    const newTx: TransactionItem = {
+      id: Date.now(),
+      title: `Earmark to Goal: ${goal.name}`,
+      category: 'Savings',
+      amount: actualDeposit,
+      type: 'TRANSFER',
+      isCredit: false,
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      timestamp: Date.now(),
+      paymentMethod: 'Vault Allocation',
+      notes: `Transferred ₹${actualDeposit.toLocaleString('en-IN')} to earmarked savings for ${goal.name}`,
+      isFamilyShared: true,
+      memberName: 'Priyanshu',
+      iconName: 'Target',
+      riskStatus: 'VERIFIED'
+    };
+    setTransactions((prev) => [newTx, ...prev]);
   };
 
   const withdrawGoal = (id: number, amount: number) => {
+    const goal = goals.find((g) => g.id === id);
+    if (!goal || isNaN(amount) || amount <= 0) return;
+
+    // Cannot withdraw more than is currently in the goal
+    const actualWithdrawal = Math.min(amount, goal.currentAmount);
+    if (actualWithdrawal <= 0) return;
+
     setGoals((prev) =>
-      prev.map((g) => (g.id === id ? { ...g, currentAmount: Math.max(g.currentAmount - amount, 0) } : g))
+      prev.map((g) => (g.id === id ? { ...g, currentAmount: g.currentAmount - actualWithdrawal } : g))
     );
-    addIncome(`Goal Withdrawal: Goal #${id}`, 'Savings', amount, 'Vault Transfer', 'Withdrawn to Vault');
+
+    // Internal stock transfer: return from goal stock to unassigned liquid cash
+    setUserProfile((prev) => ({
+      ...prev,
+      totalBalance: prev.totalBalance + actualWithdrawal
+    }));
+
+    // Record transaction as TRANSFER (NOT an INCOME, does NOT inflate monthly earned income)
+    const newTx: TransactionItem = {
+      id: Date.now(),
+      title: `De-allocated from Goal: ${goal.name}`,
+      category: 'Savings',
+      amount: actualWithdrawal,
+      type: 'TRANSFER',
+      isCredit: true,
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      timestamp: Date.now(),
+      paymentMethod: 'Vault Allocation',
+      notes: `Returned ₹${actualWithdrawal.toLocaleString('en-IN')} from ${goal.name} to liquid cash`,
+      isFamilyShared: true,
+      memberName: 'Priyanshu',
+      iconName: 'Target',
+      riskStatus: 'VERIFIED'
+    };
+    setTransactions((prev) => [newTx, ...prev]);
   };
 
   const deleteGoal = (id: number) => {
@@ -1470,17 +1804,33 @@ export const FinFamProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const resetAllData = () => {
-    localStorage.clear();
+    const FINFAM_KEYS = [
+      'finfam_profile',
+      'finfam_transactions',
+      'finfam_budgets',
+      'finfam_goals',
+      'finfam_bills',
+      'finfam_family',
+      'finfam_emis',
+      'finfam_notifications',
+      'finfam_transfers',
+      'finfam_payments',
+      'finfam_decision_history',
+      'finfam_is_demo'
+    ];
+    FINFAM_KEYS.forEach((k) => localStorage.removeItem(k));
     setUserProfile(INITIAL_PROFILE);
     setTransactions(INITIAL_TRANSACTIONS);
     setBudgets(INITIAL_BUDGETS);
-    setGoals(INITIAL_GOALS);
+    setGoals(INITIAL_GOALS.map((g) => GoalFeasibilityEngine.normalizeGoal(g)));
     setBills(INITIAL_BILLS);
     setFamilyMembers(INITIAL_FAMILY);
     setEmis(INITIAL_EMIS);
     setNotifications(INITIAL_NOTIFICATIONS);
     setRadarHealthAxes(INITIAL_RADAR_AXES);
     setRealTimeTransferHistory(INITIAL_TRANSFER_HISTORY);
+    setIsDemoMode(false);
+    setPreviousGoalsSnapshot(null);
   };
 
   return (
@@ -1544,6 +1894,22 @@ export const FinFamProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         depositGoal,
         withdrawGoal,
         deleteGoal,
+        updateGoal,
+        setGoals,
+        householdProfile,
+        setHouseholdProfile,
+        goalFeasibilities,
+        sharedTimeline,
+        goalConflicts,
+        interferenceMatrix,
+        resolutionResult,
+        isDemoMode,
+        loadJudgeDemoScenario,
+        resetJudgeDemoScenario,
+        applyResolutionScenario,
+        revertLastAppliedPlan,
+        previousGoalsSnapshot,
+        setPreviousGoalsSnapshot,
         addBill,
         payBill,
         deleteBill,
@@ -1559,7 +1925,12 @@ export const FinFamProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         decisionHistory,
         saveDecisionRecord,
         deleteDecisionRecord,
-        updateDecisionStatus
+        updateDecisionStatus,
+        isPaymentGatewayOpen,
+        activeGatewayOrder,
+        openPaymentGateway,
+        closePaymentGateway,
+        handleGatewayPaymentSuccess
       }}
     >
       {children}

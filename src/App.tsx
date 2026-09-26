@@ -18,7 +18,12 @@ import {
   DecisionResultsScreen,
   DecisionExplanationScreen,
   SensitivityAnalysisScreen,
-  DecisionHistoryScreen
+  DecisionHistoryScreen,
+  GoalPortfolioDashboardScreen,
+  GoalInterferenceMapScreen,
+  RippleSimulatorScreen,
+  ResolutionLabScreen,
+  GoalTimelineScreen
 } from './screens/index';
 import {
   AddExpenseModal,
@@ -30,6 +35,7 @@ import {
   AddEmiModal,
   ScanReceiptModal
 } from './components/Dialogs';
+import { PaymentGatewayModal } from './components/PaymentGatewayModal';
 import {
   DecisionCriterion,
   DecisionConstraint,
@@ -54,7 +60,11 @@ export const App: React.FC = () => {
     decisionHistory,
     saveDecisionRecord,
     deleteDecisionRecord,
-    updateDecisionStatus
+    updateDecisionStatus,
+    isPaymentGatewayOpen,
+    activeGatewayOrder,
+    closePaymentGateway,
+    handleGatewayPaymentSuccess
   } = useFinFam();
 
   const [currentRoute, setCurrentRoute] = useState<string>('home');
@@ -298,6 +308,76 @@ export const App: React.FC = () => {
               setSelectedGoalForTopUp(goal);
               setIsTopUpGoalOpen(true);
             }}
+            onNavigate={(route) => setCurrentRoute(route)}
+          />
+        );
+
+      case 'goal_portfolio':
+        return (
+          <GoalPortfolioDashboardScreen
+            onNavigate={(route) => setCurrentRoute(route)}
+            onOpenAddGoal={() => setIsAddGoalOpen(true)}
+            onSelectGoalForTopUp={(goal) => {
+              setSelectedGoalForTopUp(goal);
+              setIsTopUpGoalOpen(true);
+            }}
+          />
+        );
+
+      case 'goal_interference':
+        return (
+          <GoalInterferenceMapScreen
+            onNavigate={(route) => setCurrentRoute(route)}
+          />
+        );
+
+      case 'what_if':
+      case 'ripple_simulator':
+        return (
+          <RippleSimulatorScreen
+            onNavigate={(route) => setCurrentRoute(route)}
+          />
+        );
+
+      case 'resolution_lab':
+        return (
+          <ResolutionLabScreen
+            onNavigate={(route) => setCurrentRoute(route)}
+            onRunMCDAOptimization={(payload) => {
+              const evals = DecisionOptimizerEngine.optimize(
+                payload.alternatives,
+                payload.criteria,
+                payload.constraints
+              );
+              const tradeOffs = TradeOffAnalyzer.generateAllTradeOffs(evals, payload.criteria);
+              const sens = SensitivityAnalysisEngine.analyzeSensitivity(
+                payload.alternatives,
+                payload.criteria,
+                payload.constraints
+              );
+              const conf = DecisionConfidenceEngine.calculateConfidence(evals, sens);
+
+              setDecisionPayload({
+                title: payload.title,
+                scenarioDilemma: payload.scenarioDilemma,
+                capitalAmount: payload.capitalAmount,
+                criteria: payload.criteria,
+                constraints: payload.constraints,
+                alternatives: payload.alternatives,
+                evaluations: evals,
+                tradeOffs,
+                sensitivityResults: sens,
+                confidence: conf
+              });
+              setCurrentRoute('optimizer_results');
+            }}
+          />
+        );
+
+      case 'goal_timeline':
+        return (
+          <GoalTimelineScreen
+            onNavigate={(route) => setCurrentRoute(route)}
           />
         );
 
@@ -392,6 +472,13 @@ export const App: React.FC = () => {
       <ScanReceiptModal
         isOpen={isScanReceiptOpen}
         onClose={() => setIsScanReceiptOpen(false)}
+      />
+      {/* Real-time Interactive Payment Gateway Checkout Modal */}
+      <PaymentGatewayModal
+        isOpen={isPaymentGatewayOpen}
+        onClose={closePaymentGateway}
+        orderData={activeGatewayOrder}
+        onPaymentSuccess={handleGatewayPaymentSuccess}
       />
     </div>
   );

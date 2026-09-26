@@ -22,31 +22,44 @@ export const ConstraintEngine = {
     let softPenalty = 0;
 
     for (const constraint of constraints) {
-      const actualVal = alternative.constraintValues[constraint.metricKey] ?? 0;
+      const rawVal = alternative.constraintValues[constraint.metricKey];
+      const isMissing = rawVal === undefined || rawVal === null || Number.isNaN(rawVal) || !Number.isFinite(rawVal);
+      const actualVal = isMissing ? NaN : Number(rawVal);
       let passed = false;
 
-      switch (constraint.operator) {
-        case '>=':
-          passed = actualVal >= constraint.targetValue;
-          break;
-        case '<=':
-          passed = actualVal <= constraint.targetValue;
-          break;
-        case '>':
-          passed = actualVal > constraint.targetValue;
-          break;
-        case '==':
-          passed = Math.abs(actualVal - constraint.targetValue) < 0.0001;
-          break;
-        default:
-          passed = true;
+      if (isMissing) {
+        passed = false;
+      } else {
+        switch (constraint.operator) {
+          case '>=':
+            passed = actualVal >= constraint.targetValue;
+            break;
+          case '<=':
+            passed = actualVal <= constraint.targetValue;
+            break;
+          case '>':
+            passed = actualVal > constraint.targetValue;
+            break;
+          case '==':
+            passed = Math.abs(actualVal - constraint.targetValue) < 0.0001;
+            break;
+          default:
+            passed = true;
+        }
       }
 
       let penalty = 0;
       let violationMsg: string | undefined;
 
       if (!passed) {
-        if (constraint.type === 'HARD') {
+        if (isMissing) {
+          violationMsg = `Constraint metric missing: ${constraint.name} (${constraint.metricKey} is undefined)`;
+          if (constraint.type === 'HARD') {
+            hardViolations.push(violationMsg);
+          } else {
+            softPenalty += 0.35;
+          }
+        } else if (constraint.type === 'HARD') {
           violationMsg = `Violates hard constraint: ${constraint.name} (Actual: ${actualVal}${constraint.unit}, Required: ${constraint.operator} ${constraint.targetValue}${constraint.unit})`;
           hardViolations.push(violationMsg);
         } else {

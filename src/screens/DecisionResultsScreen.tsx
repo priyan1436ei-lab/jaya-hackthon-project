@@ -123,12 +123,18 @@ export const DecisionResultsScreen: React.FC<DecisionResultsScreenProps> = ({
 
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 relative z-10">
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1 text-[11px] font-extrabold uppercase font-mono px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  <Trophy className="w-3.5 h-3.5 text-amber-400" /> Rank #1 Recommended
-                </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {winner.isFeasible ? (
+                  <span className="flex items-center gap-1 text-[11px] font-extrabold uppercase font-mono px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" /> Rank #1 Recommended
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[11px] font-extrabold uppercase font-mono px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> No Fully Feasible Plan (Best Partial Score)
+                  </span>
+                )}
                 <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${confidenceBadgeColor}`}>
-                  {confidence.confidenceTier} Confidence ({confidence.confidenceScore}%)
+                  Robustness: {confidence.confidenceTier} ({confidence.confidenceScore}%)
                 </span>
                 {winner.isFeasible ? (
                   <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
@@ -136,7 +142,7 @@ export const DecisionResultsScreen: React.FC<DecisionResultsScreenProps> = ({
                   </span>
                 ) : (
                   <span className="text-[11px] font-semibold text-rose-400 flex items-center gap-1 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-                    <AlertTriangle className="w-3 h-3" /> Constraint Violation
+                    <AlertTriangle className="w-3 h-3" /> Hard Constraint Violation
                   </span>
                 )}
               </div>
@@ -325,7 +331,7 @@ export const DecisionResultsScreen: React.FC<DecisionResultsScreenProps> = ({
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="text-sm font-bold text-white tracking-tight">{alt.title}</h4>
-                        {isTop && (
+                        {isTop && evalItem.isFeasible && (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                             BEST FIT
                           </span>

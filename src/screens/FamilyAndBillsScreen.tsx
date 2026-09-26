@@ -15,7 +15,7 @@ import { FinancialEngine } from '../lib/financialEngine';
 export const FamilyAndBillsScreen: React.FC<{
   onOpenAddBill: () => void;
 }> = ({ onOpenAddBill }) => {
-  const { familyMembers, bills, addFamilyMember, deleteFamilyMember, payBill, deleteBill } =
+  const { familyMembers, bills, addFamilyMember, deleteFamilyMember, payBill, deleteBill, openPaymentGateway } =
     useFinFam();
 
   const [newMemberName, setNewMemberName] = useState('');
@@ -212,8 +212,15 @@ export const FamilyAndBillsScreen: React.FC<{
                 </div>
                 {!bill.isPaid ? (
                   <button
-                    onClick={() => payBill(bill.id, bill.name, bill.amount, 'UPI')}
-                    className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#050816] text-xs font-bold transition-all"
+                    onClick={() =>
+                      openPaymentGateway({
+                        title: `${bill.name} (${bill.category})`,
+                        amount: bill.amount,
+                        category: 'BILL',
+                        billId: bill.id
+                      })
+                    }
+                    className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#050816] text-xs font-bold transition-all shadow-md shadow-cyan-500/20"
                   >
                     Pay
                   </button>
