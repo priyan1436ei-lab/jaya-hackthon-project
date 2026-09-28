@@ -271,3 +271,4 @@ This project is developed for educational and demonstration purposes.
 💡 FinFam AI
 
 Track your money. Understand your habits. Build your future. 💰🤖
+# demo12
